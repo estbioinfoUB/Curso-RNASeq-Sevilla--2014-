@@ -10,23 +10,37 @@ La sesiones intercalaran la exposición de los contenidos teóricos con ejercici
 ### Presentaciones
 
 [1.1 Introducción](https://github.com/estbioinfoUB/Curso-RNASeq-Sevilla-2014/blob/main/Slides/1.0-intro.pdf)
+
 [1.2 Conceptos básicos de Biología para la bioinformática.](https://github.com/estbioinfoUB/Curso-RNASeq-Sevilla-2014/blob/main/Slides/1.1-Biology%20in%20a%20nutshell.pdf)
+
 [1.3 Introducción a la ultrasecuenciación.]()
+
 [2.1 Introducción a R y Bioconductor. ]()
+
 [2.2 Bioconductor para el análisis de secuencias]()
+
 [2.3 Paquetes de Bioconductor para la secuenciación]()
+
 [4. Control de calidad y pre-procesamiento de los datos. ]()
+
 [5. Indexación y mapeo de las secuencias. Cuantificación de las secuencias.]()
+
 [6. Análisis básicos: selección de transcritos diferencialmente expresados. ]()
+
 [7. Otros análisis: Detección de isoformas. Chip-seq]()
+
 [8. Hacia una interpretación biológica de los resultados. Análisis de enriquecimiento y técnicas relacionadas.]()
 
 ### Ejercicios prácticos
 
 1. Visualización de datos de secuenciación
+
 2. Mapeo de _reads_
+
 3. Control de calidad
+
 4. Seleccion de tránscritos diferencialmente expresados
+
 5. Analisis de Pathways con GAGE
 
 La página del curso es: [https://estbioinfoub.github.io/Curso-RNASeq-Sevilla-2014/](https://estbioinfoub.github.io/Curso-RNASeq-Sevilla-2014/)
