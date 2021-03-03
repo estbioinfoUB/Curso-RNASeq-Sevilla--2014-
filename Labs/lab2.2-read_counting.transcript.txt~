@@ -1,0 +1,98 @@
+In this module, we'll be discussing basic bioconnector infrastructure
+for genomics, microarray, and next-generation sequencing.
+And I'm going to start with the I Ranges package.
+I Ranges is a library for representing ranges
+of integers, which is useful in genomics, because we have base pair
+ranges that we'd like to manipulate.
+So there's a very detailed vignette, which you can access,
+as we showed before, using the Browse Vignettes function.
+And this contains a lot of detailed information about all
+the different classes and functions which are contained in the I Ranges
+Package And this is really a very powerful package,
+and the code is written such that the simplest
+functions can be performed very fast.
+So it's worth taking a look there.
+I'm just going to show you a summary of the most important functions.
+I Ranges have a start an end, and a width.
+If you just specify two numbers, you specify the start and the end.
+So here we have an I Range which starts at 5, ends at 10,
+and it's there for six base pairs long.
+So here, you can see that the first three
+arguments are start, end, and width.
+And if you specify the start is 5, and the width should be 6,
+you'll get the identical I Range.
+So the start function will return the start values.
+The end will give you the end, and the width will give you the width.
+You can also specify more than one range at a time,
+so if you give three starts and three ends,
+you get a I Ranges object of length 3.
+So you can see it has length 3.
+And if you, again, ask for the starts, you'll
+get the three different starts, 3, 5, and 17.
+But for the next code sections, I'm just going
+to use the single range, which starts at 5 and ends at 10.
+There are a number of intra range methods for I Ranges.
+And intra range means that the operation will occur for each range
+that you have, and it doesn't depend on the other ranges that
+are contained in I Ranges object.
+So an example of this is to shift the I Range to the left by two.
+So before we had an I Range that started at 5 and ended at 10,
+and applying the shift operation produces an I Range which starts at 3
+and ends at 8.
+So in addition to the shift function, we also have a number of other functions,
+including narrow.
+Narrow says relative to the start, you should instead
+start this range at the second base pair.
+So relative to 5, it should start at 6.
+You can also say, relative to 5, you should
+end on the fifth base pair, which means it should end at 9.
+The flank function allows you to get flanking sequence
+here three base pairs from the start.
+You can also get three base pairs from the end
+by specifying start equals false.
+And you can say you want a bidirectional flanking sequence
+from the start by specifying both equals true.
+And so now I'm going to just show you graphically the exact same functions I
+just showed you using just simply using the plot function.
+So here I'm drawing base pairs.
+So the number indicates the base pair, and I'm drawing the original range.
+So here, the original range started at 5 and ended at 10.
+So you could see that the way I'm plotting it,
+it includes the beginning and the end base pair.
+So it's width 6.
+And just to make things more visually easy to see,
+I'll shade the shadow of this range in red.
+So shifting by minus 2 generates an I Range which starts at 3 and ends at 8,
+like we had before.
+And that just looks obviously like a shift to the left by two.
+The narrow function, where we had it should start at the second base pair.
+That just means that this range should start at 6.
+So instead of starting at the first base pair, take the second base pair.
+And by specifying that the end should be 5,
+it's saying only go five base pairs from the start.
+So the flank function gave us three base pairs from the start to the left,
+and the flank function with start equals false gave us the flanking sequence
+downstream from the range.
+And by specifying both equals true, it gave us three base pairs to the left
+and to the right of the start.
+So that's just an easy way to visualize what's going on.
+There's even more intra range methods, but I just
+want to show the most basic ones.
+The inter range methods are those functions
+which depend on the other ranges in the object.
+So here, let's create an I Ranges object with three ranges, which
+starts at 3, 5, 17, ends at 10, 8, and 20.
+And if you ask for the range, this will give you the beginning of the I Ranges
+to the end, including gaps in between.
+So this gives us the start of 3 and the end of 20.
+If we say reduce, it gives us those base pairs
+which are covered by the original ranges.
+So we do not get the gap, so the end at 10 and the beginning at 17.
+We can ask for the gaps, which gives us a gap from 10 to 17.
+Therefore, the gap starts at 11 and ends at 16.
+Finally, we have the disjoint function, which
+gives a set of ranges which has the same coverage as the original I Ranges
+object, but they're not overlapping in any way,
+and they also contain the union of all the endpoints of the original range.
+Go back to start of transcript.
+Download video Download transcript

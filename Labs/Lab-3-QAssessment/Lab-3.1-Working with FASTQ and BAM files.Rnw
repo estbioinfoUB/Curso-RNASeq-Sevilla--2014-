@@ -1,0 +1,653 @@
+% \VignetteEngine{knitr::knitr}
+% \VignetteIndexEntry{04. Bioconductor for Sequence Analysis}
+
+\documentclass{article}
+
+\newcommand{\Dmel}{\emph{D.\ melanogaster}}
+\newcommand{\Hsap}{\emph{H.\ sapiens}}
+
+\usepackage{Exercise}
+<<style, eval=TRUE, echo=FALSE, results="asis">>=
+BiocStyle::latex()
+library(knitr)
+opts_chunk$set(cache=TRUE, tidy=FALSE)
+@ 
+
+<<packages, eval=TRUE, echo=FALSE, warning=FALSE, message=FALSE>>=
+suppressPackageStartupMessages({
+    library(ShortRead)
+    library(VariantAnnotation)
+    library(BiocParallel)
+    library(ggplot2)
+    library(RNAseqData.HNRNPC.bam.chr14)
+    library(TxDb.Hsapiens.UCSC.hg19.knownGene)
+    library(BSgenome.Hsapiens.UCSC.hg19)
+    library(AnnotationHub)
+    library(rtracklayer)
+    library(BiocIntro)
+})
+@ 
+
+\title{\Bioconductor{} for Sequence Analysis}
+\author{Martin T.\ Morgan\footnote{\url{mtmorgan@fhcrc.org}}}
+\date{27-28 February 2014}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+
+\paragraph{Common file formats}
+
+The `big data' component of high-throughput sequence analyses seems to
+be a tangle of transformations between file types; common files are
+summarized in Table~\ref{tab:seq:fileformats}. FASTQ and BAM
+(sometimes CRAM) files are the primary formats for representing raw
+sequences and their alignments. VCF are used to summarize called
+variants in DNA-seq; BED and sometimes WIG files are used to represent
+ChIP and other regulatory peaks and `coverage'. GTF / GFF files are
+important for providing feature annotations, e.g., of exons
+organization into transcripts and genes.
+
+\begin{table}
+  \centering
+  \caption{Common 
+    \href{http://genome.ucsc.edu/FAQ/FAQformat.html}{file types} and
+    \Bioconductor{} packages used for input.}
+  \label{tab:seq:fileformats}
+  \begin{tabular}{lp{.6\textwidth}l}
+    File & Description & Package \\\hline\noalign{\smallskip}
+    FASTQ & Unaligned sequences: identifier, sequence, and encoded
+    quality score tuples & \Biocpkg{ShortRead}\\
+
+    BAM & Aligned sequences: identifier, sequence, reference sequence
+    name, strand position, cigar and additional tags &
+    \Biocpkg{Rsamtools} \\
+    
+    VCF & Called single nucleotide, indel, copy number, and structural
+    variants, often compressed and indexed (with \Biocpkg{Rsamtools}
+    \Rfunction{bgzip}, \Rfunction{indexTabix}) &
+    \Biocpkg{VariantAnnotation} \\
+
+    GFF, GTF & Gene annotations: reference sequence name, data source,
+    feature type, start and end positions, strand, etc. &
+    \Biocpkg{rtracklayer}\\
+    
+    BED & Range-based annotation: reference sequence name, start, end
+    coordinates. & \Biocpkg{rtracklayer}\\
+    
+    WIG, bigWig & `Continuous' single-nucleotide annotation. &
+    \Biocpkg{rtracklayer}\\
+    
+    2bit & Compressed FASTA files with `masks' \\
+
+    \hline    
+  \end{tabular}
+\end{table}
+
+\section{Short reads: FASTQ files}
+
+\subsection{FASTQ files}
+
+The Illumina GAII and HiSeq technologies generate sequences by
+measuring incorporation of florescent nucleotides over successive PCR
+cycles. These sequencers produce output in a variety of formats, but
+\emph{FASTQ} is ubiquitous. Each read is represented by a record of
+four components:
+
+<<fastq-format, echo=FALSE>>=
+setwd("../..")
+courseDir <- getwd()
+DataDir<- file.path(courseDir, "Data")
+fl <- file.path(DataDir,"ERR127302_2_subset.fastq.gz")
+cat(noquote(tail(readLines(fl, 800), 4)), sep="\n")
+fq <- FastqStreamer(fl, 100000)
+enc <- yield(fq)
+close(fq)
+@ 
+\noindent The first and third lines (beginning with \verb|@| and
+\verb|+| respectively) are unique identifiers. The identifier produced
+by the sequencer typically includes a machine id followed by
+colon-separated information on the lane, tile, x, and y coordinate of
+the read. The example illustrated here also includes the SRA accession
+number, added when the data was submitted to the archive. The machine
+identifier could potentially be used to extract information about
+batch effects. The spatial coordinates (lane, tile, x, y) are often
+used to identify optical duplicates; spatial coordinates can also be
+used during quality assessment to identify artifacts of sequencing,
+e.g., uneven amplification across the flow cell, though these spatial
+effects are rarely pursued.
+
+The second and fourth lines of the FASTQ record are the nucleotides
+and qualities of each cycle in the read. This information is given in
+5' to 3' orientation as seen by the sequencer. A letter \texttt{N} in
+the sequence is used to signify bases that the sequencer was not able
+to call.  The fourth line of the FASTQ record encodes the quality
+(confidence) of the corresponding base call. The quality score is
+encoded following one of several conventions, with the general notion
+being that letters later in the visible ASCII alphabet
+<<ascii, echo=FALSE>>=
+encoding(quality(enc))
+@ 
+\noindent are of higher quality. Letters map to numbers, and numbers
+correspond (most commonly) to $-10\log_{10}{p}$. In the encoding above,
+\texttt{I} corresponds to a phred score of 40, hence $p=0.0001$. Both
+the sequence and quality scores may span multiple lines.
+
+\subsection{Basic Manipulations of a FASTQ file}
+
+\begin{Exercise}
+  Here we take a first look at FASTQ files from the
+  ArrayExpress repository
+  E-MTAB-1147\footnote{\url{http://www.ebi.ac.uk/arrayexpress/experiments/E-MTAB-1147/}}
+  \cite{zarnack2013direct}.
+  \begin{enumerate}
+  \item Load the \Biocpkg{ShortRead} and \Biocpkg{BiocParallel} packages.
+  \item Create a character vector \Rcode{dirPath} to the
+    \file{bigdata/fastq} directory containing the files
+    \file{ERR127302\_1.fastq.gz}, \file{ERR127302\_2.fastq.gz}.
+   \item Read in a representative sample from \file{ERR127302\_1.fastq.gz}
+  \item simple manipulations on a FASTQ file -id, reads and quality
+  \item summarize use of nucleotides at each cycle
+  \item Analyzing nucleotides per cycle, gc content and quality score per cycle
+  \item Construct histogram of the GC content of individual reads
+  \end{enumerate}
+\end{Exercise}
+
+\begin{Solution}
+  Load the \Biocpkg{ShortRead} and \CRANpkg{BiocParallel} packages
+<<ShortRead>>=
+library(ShortRead)
+library(BiocParallel)
+@   
+ FASTQ files are getting larger. A very common reason for looking at data at this 
+early stage in the processing pipeline is to explore sequence quality. In these 
+circumstances it is often not necessary to parse the entire FASTQ file. Instead 
+create a representative sample.
+
+The following code illustrates what we should do if we had started working with the whol fastq file (3Gb) from where we might have extracted 1 million reads
+
+<<getreads, eval=FALSE>>=
+dirPath <- "~/bigdata/fastq"
+sampler <- FastqSampler(file.path(dirPath, "ERR127302_1.fastq.gz"), 1000000)
+reads <- yield(sampler)
+@ 
+instead we extract some from the subset we are working with
+
+<<getreads2>>=
+sampler <- FastqSampler(file.path(DataDir, "ERR127302_1_subset.fastq.gz"), 10000)
+sampler <- FastqSampler(file.path(DataDir, "SRR490225.fastq.gz"), 10000)
+reads <- yield(fq)
+@
+
+Look at the id , reads and the quality
+ <<id-qual>>=
+# outputs read ids as a list as BStringSet
+head( id(reads) )
+
+# outputs read sequences as a list as DNAStringSet
+head(sread(reads) )
+
+# outputs list of quality scores as BStringSet
+head(quality(reads)) 
+@
+The alphabetByCycle function summarizes use of nucleotides at each cycle in 
+a (equal width) ShortReadQ or DNAStringSet instance.
+
+<<fastq-3>>=
+abc <- alphabetByCycle(sread(reads))
+abc[1:4, 1:8]
+matplot(t(abc[c("A","G","T","C"),]), type="l")
+@
+A histogram of the GC content of individual reads is obtained with:
+<<fastq-4>>=
+alf0 <- alphabetFrequency(sread(reads), as.prob=TRUE)
+hist(alf0[,c("G", "C")] ,
+     main =  "Histogram of gc Content",
+     xlab="individual reads" )
+
+@
+
+\end{Solution}
+
+\subsection{Quality assessment}
+
+\begin{Exercise}
+  Here we create a quality assessment report of FASTQ files from the
+  ArrayExpress repository
+  E-MTAB-1147\footnote{\url{http://www.ebi.ac.uk/arrayexpress/experiments/E-MTAB-1147/}}
+  \cite{zarnack2013direct}.
+  \begin{enumerate}
+  \item Create a quality report for these two files using the
+    \Rfunction{ShortRead::qa} function, e.g., \Rcode{qa <- qa(dirPath,
+      "ERR*", type="fastq")}.
+  \item View the quality report in a web browser with
+    \Rcode{browseURL(report(qa))}
+  \item View the QA report for all fastq files in the full
+    experiment. Do this by loading the prepared data object
+    \file{E-MTAB-1147-qa\_report.Rda}. Discuss the meaning of each
+    plot with your neighbor. What technology arti
+  \end{enumerate}
+\end{Exercise}
+
+\begin{Solution}
+  Create the QA report from two sample files
+<<qa>>=
+qa <- qa(dirPath, "ERR*", type="fastq")
+@ 
+  View the report
+<<browse-qa, eval=FALSE>>=
+browseURL(report(qa))
+@ 
+Load the report for all lanes
+<<qa_all>>=
+(load(file.path(dirPath, "E-MTAB-1147-qa_report.Rda")))
+@ 
+View the report
+<<browse-qa_all, eval=FALSE>>=
+browseURL(report(qa))
+@ 
+\end{Solution}
+
+\subsection{Trimming}
+
+\begin{Exercise}
+  This exercise explores trimming, then applies a trimming filter to
+  several FASTQ files.
+  
+  Start by loading the \Rpackage{BiocIntro} package
+<<BiocIntro>>=
+library(BiocIntro)
+@   
+
+\begin{enumerate}
+\item Create a character vector pointing to a FASTQ file, \Rcode{fl <-
+    file.path(dirPath, "ERR127302\_1.fastq.gz")}
+\item Load a random sample of 100,000 reads from the FASTQ file,
+  using \Rcode{fq <- FastqSampler()} and \Rcode{srq <- yield(fq)}
+\item Plot a histogram of qualities as a function of cycle,
+  \Rcode{plotByCycle(srq)}.
+\item Look at how qualities are encoded using
+  \Rcode{encoding(quality(srq))}.
+\item Trim reads after the first 3 nucleotides with aveage quality
+  less than 20 (encoding \texttt{"5"}) using \Rcode{trimTails(srq,
+    3, "5")}
+\end{enumerate}
+\end{Exercise}
+
+\begin{Solution}
+\noindent Load a sample of 100,000 reads and visualize their quality
+<<sampler, fig.height=3>>=
+fl <- file.path(dirPath, "ERR127302_1.fastq.gz")
+fq <- FastqSampler(fl, 100000)
+srq <- yield(fq)
+srq
+plotByCycle(quality(srq))
+@ 
+\noindent Trim the reads and visualize qualities
+<<trim, fig.height=3>>=
+trimmed <- trimTails(srq, 3, "5")
+plotByCycle(quality(trimmed))
+@ 
+\end{Solution}
+
+\begin{Exercise}
+  (Optional) This exercise trims all reads using our trimming
+  function.
+
+  \begin{enumerate}
+  \item List the full path to all fastq files using \Rcode{fls <-
+      dir(dirPath, pattern="fastq.gz", full=TRUE)}.
+  \item Create destination files for each source file, using
+    \Rcode{destinations <- sub("fastq.gz", "trimmed.fastq", fls)}
+  \item Trim reads as before, but use the file paths and destinations
+    as arguments, \Rcode{trimTails(fls, 3, "5", FALSE,
+      destinations=destinations)}.
+  \end{enumerate}
+\end{Exercise}
+
+\begin{Solution}
+  Identify relevant files
+<<trim-file-names>>=
+(fls <- dir(dirPath, pattern="fastq.gz", full=TRUE))
+@ 
+\noindent  Map the file names to destinations
+<<trim-dest-names>>=
+(destinations <- sub("fastq.gz", "trimmed.fastq", fls))
+@ 
+\noindent  Perform the trimming
+<<trim-files, eval=FALSE>>=
+trimTails(fls, 2, "5", destinations=destinations)
+@ 
+\end{Solution}
+
+\section{Aligned reads: BAM files}
+
+\subsection{BAM files}
+
+Most down-stream analysis of short read sequences is based on reads
+aligned to reference genomes. There are many aligners available,
+including \href{http://bio-bwa.sourceforge.net/}{BWA}
+\cite{pmid20080505,pmid19451168},
+\href{http://bowtie-bio.sourceforge.net/}{Bowtie} /
+\href{http://bowtie-bio.sourceforge.net/bowtie2/}{Bowtie2}
+\cite{pmid19261174}, and
+\href{http://research-pub.gene.com/gmap/}{GSNAP}; merits of these are
+discussed in the literature. There are also alignment algorithms
+implemented in \Bioconductor{} (e.g., \Rfunction{matchPDict} in the
+\Biocpkg{Biostrings} package, and the \Biocpkg{Rsubread} package);
+\Rfunction{matchPDict} is particularly useful for flexible alignment
+of moderately sized subsets of data.
+
+\paragraph{Alignment formats}
+
+Most main-stream aligners produce output in SAM (text-based) or BAM
+format. A SAM file is a text file, with one line per aligned read, and
+fields separated by tabs. Here is an example of a single SAM line,
+split into fields.
+<<SAM>>=
+fl <- system.file("extdata", "ex1.sam", package="Rsamtools")
+strsplit(readLines(fl, 1), "\t")[[1]]
+@
+
+Fields in a SAM file are summarized in Table~\ref{tbl:sam}.
+\begin{table}
+  \centering
+  \caption{Fields in a SAM record. From
+    \url{http://samtools.sourceforge.net/samtools.shtml}}
+  \medskip
+  \label{tbl:sam}
+  \begin{tabular}{lll}
+    Field & Name & Value \\\hline\noalign{\smallskip}
+    1 & QNAME & Query (read) NAME \\
+    2 & FLAG & Bitwise FLAG, e.g., strand of alignment \\
+    3 & RNAME & Reference sequence NAME \\
+    4 & POS & 1-based leftmost POSition of sequence \\
+    5 & MAPQ & MAPping Quality (Phred-scaled) \\
+    6 & CIGAR & Extended CIGAR string \\
+    7 & MRNM & Mate Reference sequence NaMe \\
+    8 & MPOS & 1-based Mate POSition \\
+    9 & ISIZE & Inferred insert SIZE \\
+    10 & SEQ & Query SEQuence on the reference strand \\
+    11 & QUAL & Query QUALity \\
+    12$+$ & OPT & OPTional fields, format TAG:VTYPE:VALUE \\\hline
+  \end{tabular}
+\end{table}
+We recognize from the FASTQ file the identifier string, read sequence
+and quality. The alignment is to a chromosome `seq1' starting at
+position 1. The strand of alignment is encoded in the `flag' field.
+The alignment record also includes a measure of mapping quality, and
+a CIGAR string describing the nature of the alignment. In this case,
+the CIGAR is 36M, indicating that the alignment consisted of 36
+\texttt{M}atches or mismatches, with no indels or gaps; indels are
+represented by \texttt{I} and \texttt{D}; gaps (e.g., from alignments
+spanning introns) by \texttt{N}.
+
+BAM files encode the same information as SAM files, but in a format
+that is more efficiently parsed by software; BAM files are the primary
+way in which aligned reads are imported in to \R{}. 
+
+\subsection{Gapped alignments in \R{}}
+
+The \Rfunction{readGAlignments} function from the
+\Biocpkg{GenomicAlignments} package reads essential information from a BAM
+file in to \R. The result is an instance of the
+\Rclass{GappedAlignments} class. The \Rclass{GappedAlignments} class
+has been designed to allow useful manipulation of many reads (e.g., 20
+million) under moderate memory requirements (e.g., 4 GB).
+\begin{Exercise}
+  This exercise explores the \Rclass{GappedAlignments} class.
+  
+  \begin{enumerate}
+  \item Load the \Biocexptpkg{RNAseqData.HNRNPC.bam.chr14} and
+    retrieve the names of the BAM files it contains. These BAM files
+    are subsets of a larger experiment.
+  \item Read one BAM file in to \R{} using
+    \Rfunction{readGAlignments}. How many reads are there? What do the
+    first few records look like?
+  \item Use the \Rfunction{strand} accessor and the standard \R{}
+    function \Rfunction{table} to tabulate the number of reads on the
+    plus and minus strand. Use the \Rfunction{width} and
+    \Rfunction{cigar} accessors to summarize the aligned width and to
+    explore the alignment cigars.
+  \item The \Rfunction{readGAlignments} function takes an additional
+    argument, \Rcode{param}, allowing the user to specify regions of
+    the BAM file (e.g., known gene coordinates) from which to extract
+    alignments, and other data to be extracted from the BAM
+    file. Create a \Rclass{ScanBamParam} object with argument
+    \Rcode{what="seq"}, and use this to input the read sequences as
+    well as basic alignment information.
+  \item With larger BAM files we often want to iterate through the
+    file in chunks. Do this by creating a \Rclass{BamFile} from a file
+    path, specifying a \Rcode{yieldSize}. Then write a short loop that
+    uses \Rfunction{readGAlignments} to input successive chunks until
+    there are no more records left.
+  \end{enumerate}
+\end{Exercise}
+\begin{Solution}
+  Load the experiment data library and read in one file, discovering
+  the number of reads present
+<<readGAlignments>>=
+library(GenomicAlignments)
+library(RNAseqData.HNRNPC.bam.chr14)
+fls <- RNAseqData.HNRNPC.bam.chr14_BAMFILES
+basename(fls)
+aln <- readGAlignments(fls[1])
+length(aln)
+head(aln, 3)
+@
+\noindent A \Rclass{GappedAlignments} instance is like a data frame,
+but with accessors as suggested by the column names. It is easy to
+query, e.g., the distribution of reads aligning to each strand, the
+width of reads, or the cigar strings
+<<GappedAlignments-accessors>>=
+table(strand(aln))
+range(width(aln))
+head(sort(table(cigar(aln)), decreasing=TRUE))
+@ 
+\noindent Here we construct a \Rclass{ScanBamParam} object and
+indicate that we would also like to input the read sequence.
+<<GappedAlignments-reads>>=
+param <- ScanBamParam(what="seq")
+aln <- readGAlignments(fls[1], param=param)
+@ 
+\noindent To iterate through a BAM file, create a \Rclass{BamFile}
+instance with appropriate \Rcode{yieldSize}. We use
+\Rcode{yieldSize=200000} in the work below, but in reality this could
+be one or two orders of magnitude larger.
+<<GappedAlignments-iter>>=
+bf <- open(BamFile(fls[1], yieldSize=200000))
+repeat {
+    aln <- readGAlignments(bf)
+    if (length(aln) == 0)
+        break                           # no more records
+    ## do work
+    message(length(aln))
+}
+close(bf)
+@ 
+
+\end{Solution}
+
+\subsection{Summarizing overlaps}
+
+\begin{Exercise}
+  A basic operation in RNA-seq and other work flows is to count the
+  number of times aligned reads overlap features of interest. 
+  
+  \begin{enumerate}
+  \item Load the `transcript db' package that contains the coordinates
+    of each exon of the UCSC 'known genes' track of hg19.
+  \item Extract the exon coordinates grouped by gene; the result is an
+    \Rclass{GRangesList} object that we will discuss more latter.
+  \item Use the \Rfunction{summarizeOverlaps} function with the exon
+    coordinates and BAM files to generate a count of the number of
+    reads overlapping each gene. Visit the help page
+    \Rcode{?summarizeOverlaps} to read about the counting strategy
+    used.
+  \item The counts can be extracted from the return value of
+    \Rfunction{summarizeOverlaps} using the function
+    \Rfunction{assay}. This is standard \R{} matrix. How many reads
+    overlapped regions of interest in each sample? How many genes had
+    non-zero counts?
+  \end{enumerate}
+  
+\end{Exercise}
+
+\begin{Solution}
+<<summarizeOverlaps>>=
+## library(BiocParallel)
+library(TxDb.Hsapiens.UCSC.hg19.knownGene)
+ex <- exonsBy(TxDb.Hsapiens.UCSC.hg19.knownGene, "gene")
+counts <- summarizeOverlaps(ex, fls)
+colSums(assay(counts))
+sum(rowSums(assay(counts)) != 0)
+@ 
+\end{Solution}
+
+\section{Variants: VCF files}
+
+A major product of DNASeq experiments are catalogs of called variants
+(e.g., SNPs, indels).  We will use the \Biocpkg{VariantAnnotation}
+package to explore this type of data.  Sample data included in the
+package are a subset of chromosome 22 from the
+\href{ftp://ftp-trace.ncbi.nih.gov/1000genomes/ftp/release/20110521/}{1000
+  Genomes} project. Variant Call Format (VCF;
+\href{http://www.1000genomes.org/wiki/Analysis/Variant%20Call%20Format/vcf-variant-call-format-version-41}{full
+  description}) text files contain meta-information lines, a header
+line with column names, data lines with information about a position
+in the genome, and optional genotype information on samples for each
+position.
+
+\subsection{Coding consequences}
+
+\paragraph{Locating variants in and around genes}
+
+Variant location with respect to genes can be identified with the
+\Rfunction{locateVariants} function. Regions are specified in the
+\Rcode{region} argument and can be one of the following constructors:
+\Rcode{CodingVariants()}, \Rcode{IntronVariants()},
+\Rcode{FiveUTRVariants()}, \Rcode{ThreeUTRVariants()},
+\Rcode{IntergenicVariants()}, \Rcode{SpliceSiteVariants()}, or
+\Rcode{AllVariants()}. Location definitions are shown in
+Table~\ref{table:location}.
+\begin{table}
+  \centering
+  \caption{Variant locations}
+  \label{table:location}
+  \begin{tabular}{lp{.7\textwidth}}
+    Location & Details \\ 
+    \hline\noalign{\smallskip}
+    \Rcode{coding} &  Within a coding region \\ 
+    \Rcode{fiveUTR} &  Within a 5' untranslated region \\
+    \Rcode{threeUTR} &   Within a 3' untranslated region \\
+    \Rcode{intron} &   Within an intron region \\
+    \Rcode{intergenic} & Not within a transcript associated with a gene \\
+    \Rcode{spliceSite} & Overlaps any of the first or last 2 nucleotides of an
+    intron \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\begin{Exercise}
+  Load the \Biocannopkg{TxDb.Hsapiens.UCSC.hg19.knownGene} annotation
+  package, and read in the \texttt{chr22.vcf.gz} example file from the
+  \Biocpkg{VariantAnnotation} package.
+  
+  Remembering to re-name sequence levels, use the
+  \Rfunction{locateVariants} function to identify coding variants.
+  
+  Summarize aspects of your data, e.g., did any coding variants match
+  more than one gene? How many coding variants are there per gene ID?
+\end{Exercise}
+
+\begin{Solution}
+  Here we open the known genes data base, and read in the VCF file.
+%% 
+<<seqlevels_rename>>=
+library(VariantAnnotation)
+library(TxDb.Hsapiens.UCSC.hg19.knownGene)
+txdb <- TxDb.Hsapiens.UCSC.hg19.knownGene 
+
+fl <- system.file("extdata", "chr22.vcf.gz", package="VariantAnnotation")
+vcf <- readVcf(fl, "hg19")
+vcf <- renameSeqlevels(vcf, c("22"="chr22"))
+@ 
+%%
+  The next lines locate coding variants.
+<<locateVariants_find>>=
+rd <- rowData(vcf)
+loc <- locateVariants(rd, txdb, CodingVariants())
+head(loc, 3)
+@ 
+% 
+  To answer gene-centric questions data can be summarized by gene
+  regardless of transcript.
+%% 
+<<locateVariants_example>>=
+## Did any coding variants match more than one gene?
+splt <- split(loc$GENEID, loc$QUERYID)
+table(sapply(splt, function(x) length(unique(x)) > 1))
+
+## Summarize the number of coding variants by gene ID
+splt <- split(loc$QUERYID, loc$GENEID)
+head(sapply(splt, function(x) length(unique(x))), 3)
+@
+\end{Solution}
+
+\paragraph{Amino acid coding changes}
+
+\Rfunction{predictCoding} computes amino acid coding changes for
+non-synonymous variants. Only ranges in \Rcode{query} that overlap
+with a coding region in \Rcode{subject} are considered. Reference
+sequences are retrieved from either a \Robject{BSgenome} or fasta file
+specified in \Rcode{seqSource}.  Variant sequences are constructed by
+substituting, inserting or deleting values in the \Robject{varAllele}
+column into the reference sequence. Amino acid codes are computed for
+the variant codon sequence when the length is a multiple of 3.
+
+The \Rcode{query} argument to \Rfunction{predictCoding} can be a
+\Robject{GRanges} or \Robject{VCF}. When a \Robject{GRanges} is
+supplied the \Rcode{varAllele} argument must be specified. In the
+case of a \Robject{VCF} object, the alternate alleles are taken from
+\Rcode{alt(<VCF>)} and the \Rcode{varAllele} argument is not
+specified.
+
+The result is a modified \Rcode{query} containing only variants that
+fall within coding regions. Each row represents a variant-transcript
+match so more than one row per original variant is possible.
+
+<<predictCoding>>=
+library(BSgenome.Hsapiens.UCSC.hg19)
+coding <- predictCoding(vcf, txdb, seqSource=Hsapiens)
+coding[5:9]
+@
+%% 
+Using variant rs114264124 as an example, we see \Rcode{varAllele}
+\Rcode{A} has been substituted into the \Rcode{refCodon} \Rcode{CGG}
+to produce \Rcode{varCodon} \Rcode{CAG}. The \Rcode{refCodon} is the
+sequence of codons necessary to make the variant allele substitution
+and therefore often includes more nucleotides than indicated in the
+range (i.e. the range is 50302962, 50302962, width of 1).  Notice it
+is the second position in the \Rcode{refCodon} that has been
+substituted. This position in the codon, the position of substitution,
+corresponds to genomic position 50302962. This genomic position maps
+to position 698 in coding region-based coordinates and to triplet 233
+in the protein. This is a non-synonymous coding variant where the
+amino acid has changed from \Rcode{R} (Arg) to \Rcode{Q} (Gln).
+
+When the resulting \Rcode{varCodon} is not a multiple of 3 it cannot
+be translated. The consequence is considered a \Rcode{frameshift} and
+\Robject{varAA} will be missing.
+
+<<predictCoding_frameshift>>=
+coding[coding$CONSEQUENCE == "frameshift"]
+@
+
+\appendix
+
+\nocite{10.1371/journal.pcbi.1003118}
+\bibliography{EMBOBGI}
+
+
+\end{document}
