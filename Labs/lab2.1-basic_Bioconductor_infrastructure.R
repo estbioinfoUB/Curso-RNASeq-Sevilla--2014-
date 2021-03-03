@@ -1,0 +1,172 @@
+
+## ----options, echo=FALSE-------------------------------------------------
+opts_chunk$set(fig.path=paste0("figure/", sub("(.*).Rmd","\\1",basename(knitr:::knit_concord$get('infile'))), "-"))
+
+
+## ------------------------------------------------------------------------
+source("http://bioconductor.org/biocLite.R")
+installifnot <- function (packageName){
+  if (!(require(packageName, character.only=TRUE))) biocLite(packageName)
+}
+installifnot("IRanges")
+installifnot("GenomicRanges")
+installifnot("GenomicAlignments")
+installifnot("parathyroidSE")
+installifnot("GenomicFeatures")
+
+
+## ------------------------------------------------------------------------
+library(IRanges)
+ir <- IRanges(5,10)
+ir
+start(ir)
+end(ir)
+width(ir)
+# ?IRanges
+
+
+## ------------------------------------------------------------------------
+ir <- IRanges(start=c(3,5,17), end=c(10,8,20))
+ir
+ir <- IRanges(5,10)
+
+
+## ------------------------------------------------------------------------
+# ?"intra-range-methods"
+shift(ir, -2)
+
+
+## ------------------------------------------------------------------------
+ir
+shift(ir,-2)
+narrow(ir, start=2)
+narrow(ir, end=5)
+flank(ir, width=3, start=TRUE, both=FALSE)
+flank(ir, width=3, start=FALSE, both=FALSE)
+flank(ir, width=3, start=TRUE, both=TRUE)
+ir * 2
+ir + 2
+ir - 2
+
+
+## ------------------------------------------------------------------------
+# set up a plotting window so we can look at range operations
+plotir <- function(ir,i) { arrows(start(ir)-.5,i,end(ir)+.5,i,code=3,angle=90,lwd=3) }
+plot(0,0,xlim=c(0,15),ylim=c(0,11),type="n",xlab="",ylab="",xaxt="n")
+axis(1,0:15)
+abline(v=0:30 + .5,col=rgb(0,0,0,.5))
+
+# plot the original IRange
+plotir(ir,1)
+
+# draw a red shadow for the original IRange
+polygon(c(start(ir)-.5,start(ir)-.5,end(ir)+.5,end(ir)+.5),c(-1,12,12,-1),col=rgb(1,0,0,.2),border=NA)
+plotir(shift(ir,-2), 2)
+plotir(narrow(ir, start=2), 3)
+plotir(narrow(ir, end=5), 4)
+plotir(flank(ir, width=3, start=TRUE, both=FALSE), 5)
+plotir(flank(ir, width=3, start=FALSE, both=FALSE), 6)
+plotir(flank(ir, width=3, start=TRUE, both=TRUE), 7)
+plotir(ir * 2, 8)
+plotir(ir + 2, 9)
+plotir(ir - 2, 10)
+
+
+## ------------------------------------------------------------------------
+# ?"inter-range-methods"
+ir <- IRanges(start=c(3,5,17), end=c(10,8,20))
+range(ir)
+reduce(ir)
+gaps(ir)
+disjoin(ir)
+
+
+## ------------------------------------------------------------------------
+library(GenomicRanges)
+gr <- GRanges("chrZ", IRanges(start=c(5,10),end=c(35,45)),
+              strand="+", seqlengths=c(chrZ=100L))
+gr
+shift(gr, 10)
+shift(gr, 80)
+trim(shift(gr, 80))
+mcols(gr)
+mcols(gr)$value <- c(-1,4)
+gr
+
+
+## ------------------------------------------------------------------------
+r <- Rle(c(1,1,1,0,0,-2,-2,-2,rep(-1,20)))
+r
+str(r)
+as.numeric(r)
+
+
+## ------------------------------------------------------------------------
+Views(r, start=c(4,2), end=c(7,6))
+
+
+## ------------------------------------------------------------------------
+gr2 <- GRanges("chrZ",IRanges(11:13,51:53))
+mcols(gr)$value <- NULL
+grl <- GRangesList(gr,gr2)
+grl
+length(grl)
+grl[[1]]
+mcols(grl)$value <- c(5,7)
+grl
+mcols(grl)
+
+
+## ------------------------------------------------------------------------
+gr1 <- GRanges("chrZ",IRanges(c(1,11,21,31,41),width=5))
+gr2 <- GRanges("chrZ",IRanges(c(19,33),c(38,35)))
+gr1
+gr2
+
+
+
+## ------------------------------------------------------------------------
+fo <- findOverlaps(gr1, gr2)
+fo
+queryHits(fo)
+subjectHits(fo)
+
+
+## ------------------------------------------------------------------------
+gr1 %over% gr2
+gr1[gr1 %over% gr2]
+
+
+## ------------------------------------------------------------------------
+library(parathyroidSE)
+data(parathyroidGenesSE)
+se <- parathyroidGenesSE
+se
+
+
+## ------------------------------------------------------------------------
+dim(se)
+assay(se)[1:3,1:3]
+dim(assay(se))
+
+
+## ------------------------------------------------------------------------
+colData(se)[1:3,1:6]
+dim(colData(se))
+names(colData(se))
+colData(se)$treatment
+
+
+## ------------------------------------------------------------------------
+rowData(se)[1]
+class(rowData(se))
+length(rowData(se))
+head(rownames(se))
+
+
+## ------------------------------------------------------------------------
+metadata(rowData(se))
+exptData(se)$MIAME
+abstract(exptData(se)$MIAME)
+
+

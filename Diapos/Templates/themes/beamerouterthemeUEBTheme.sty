@@ -1,0 +1,42 @@
+\mode<presentation>
+
+% Frame title
+\defbeamertemplate*{frametitle}{UEBTheme}[1][]
+{
+\vskip0cm%
+  \begin{beamercolorbox}[wd=\paperwidth,ht=0cm]{frametitle} 
+  \begin{tikzpicture}
+  \useasboundingbox[fill=white](0,0) rectangle(\the\paperwidth,0);
+  \fill[Plum] (0,0) rectangle(2.95,0.61);
+  \fill[VHIR] (3.05,0) rectangle(\the\paperwidth,0.61);
+  \ifx\insertframesubtitle\@empty%
+      {\node[anchor=west, white,font=\large] at (3.2,0.3){\insertframetitle};}
+      \else%
+      {\node[anchor= west, white,font=\large] at (3.2,0.81){\insertframetitle};%
+       \node[anchor= west, white,font=\small] at (3.2,0.41){\insertframesubtitle};}%
+      \fi
+  \end{tikzpicture}
+  \end{beamercolorbox}
+}
+
+% Frame Footline
+\defbeamertemplate*{footline}{UEBTheme}
+{
+    \begin{beamercolorbox}[wd=\paperwidth,ht=2.5ex,dp=1.125ex,leftskip=.3cm,rightskip=.3cm]{footline}
+        %\usebeamerfont{section in head/foot}%
+        \hfill
+        \insertdate
+        \hfill
+        \insertframenumber\,/\,\inserttotalframenumber
+     \end{beamercolorbox}
+}
+
+\setbeamercolor*{enumerate item}{fg=Plum}
+\setbeamercolor*{enumerate subitem}{fg=Plum}
+\setbeamercolor*{enumerate subsubitem}{fg=Plum}
+
+\setbeamercolor*{itemize item}{fg=Plum}
+\setbeamercolor*{itemize subitem}{fg=Plum}
+\setbeamercolor*{itemize subsubitem}{fg=Plum}
+
+\mode<all>
