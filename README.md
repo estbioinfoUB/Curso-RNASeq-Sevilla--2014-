@@ -5,7 +5,7 @@ Uno de los campos más activos ha sido, sin duda, el análisis de datos de expre
 El objetivo de este curso es introducir el campo del análisis de expresión génica utilizando para ello datos de ultrasecuenciación con la tecnología conocida como “RNA-seq”. No se presupone conocimientos de biología o tecnologías de secuenciación pero si de estadística y R. Una vez completado se debería poder tomar unos datos de expresión y tras determinar su calidad y alinearlos con un genoma de referencia poder realizar los análisis más habituales como la selección de tránscritos diferencialmente expresando utilizando en cada etapa los paquetes adecuados de Bioconductor.
 Los contenidos del curso son teórico prácticos y 
 
-    1. Introducción a los datos de ultrasecuenciación y a Bioconductor. 
+    1. [Introducción a los datos de ultrasecuenciación y a Bioconductor](https://github.com/estbioinfoUB/Curso-RNASeq-Sevilla-2014/blob/main/Diapos/L1-Introduction/1-intro.pdf)
     2. R y Bioconductor. Paquetes de Bioconductor para el manejo de datos de NGS.
     3. Control de calidad y pre-procesamiento de los datos. 
     4. Indexación y mapeo de las secuencias. Cuantificación de las secuencias.
